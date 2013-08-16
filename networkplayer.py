@@ -1,13 +1,13 @@
 import json
 
-import httplib, urllib
+import http.client, urllib.request
 
 class NetworkPlayer():
     headers = {"Content-type": "application/x-www-form-urlencoded",
            "Accept": "text/plain"}
 
     def __init__(self, port, money_payout_rates, my_spawn_point, their_spawn_point):
-        print "initing with %s" % port
+        print("initing with %s".format(port))
         self.port = port
         conn = httplib.HTTPConnection("127.0.0.1:%s" % self.port)
 
