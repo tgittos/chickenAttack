@@ -7,7 +7,7 @@ class NetworkPlayer():
            "Accept": "text/plain"}
 
     def __init__(self, port, money_payout_rates, my_spawn_point, their_spawn_point):
-        print("initing with %s".format(port))
+        print("initing with {}".format(port))
         self.port = port
         conn = httplib.HTTPConnection("127.0.0.1:%s" % self.port)
 

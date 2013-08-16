@@ -14,7 +14,7 @@ STARTING_MONEY = 100
 
 
 if len(sys.argv) != 3:
-    print("Usage: %s player1_module player2_module".format(sys.argv[0]))
+    print("Usage: {} player1_module player2_module".format(sys.argv[0]))
     sys.exit(1)
 
 
