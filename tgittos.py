@@ -22,6 +22,8 @@ class Player:
         self.their_spawn_point = their_spawn_point
         self.high_money_targets = self.get_high_money_targets(money_payout_rates)
         self.high_food_targets = self.get_high_food_targets(money_payout_rates)
+        self.chicken_actions = {}
+        self.orders = {}
 
 
     # Gets called each turn and where you decide where your chickens will go
@@ -62,48 +64,170 @@ class Player:
         friendlies = self.get_guys(guys, False)
         enemies = self.get_guys(guys, True)
 
-        # if len(enemies) > 0: print("Enemies: {}".format(enemies))
-        # if len(friendlies) > 0: print("Friendlies: {}".format(friendlies))
+        # print("Enemies: {}".format(enemies))
+        # print("Friendlies: {}".format(friendlies))
 
-        orders ={}
-        for chicken in friendlies:
-            x, y, num = chicken
+
+        # on each move, track each chicken's last position, current orders and it's action
+            # determine if any chickens died and mark their targets available (if no other chicken monitors it), clear their orders
+            # determine if chickens attacking hostile targets need to boost numbers
+                # if so, call nearest chicken in as reinformcement
+
+        # for each chicken, if it doesn't have orders, give it orders
+            # calculate the best target that is available
+            # build a path to the target
+            # mark the target as unvailable
+            # if the target is held by enemy chickens, dispatch enough chickens to win the target
+        
+        # if it does have orders
+            # if it hasn't reached the target, follow orders
+            # if it has, noop
+
+        # monitor enemy chicken movements.
+            # determine if enemy chickens are approaching a held target
+            # if so, find furthest possible chicken and order as reinforcement
+            # if no reinforcements can make it, find next desirable target and path to it, becomes new orders
+
+        # if a chicken is called in as a reinforcement, mark its spot vacant
+
+        # --------------------------------------
+
+        # first, lets take our chickens and apply their orders, to see if they are where we expect them
+        existing_friendlies = {}
+        for order_key in list(self.chicken_actions.keys()): # Python 3 compatability
+            # order_key[0] = pos, #order_key[1] = action
+            new_x, new_y = actions.next_pos(order_key[0], order_key[1])
+            existing_friendlies[(new_x, new_y)] = self.chicken_actions[order_key]
+
+        # print("Existing friendlies: {}".format(existing_friendlies))
+
+        dead_chickens = {}
+        new_chickens = {}
+
+        for key in list(existing_friendlies.keys()):
+            if not key in friendlies:
+                dead_chickens[key] = existing_friendlies[key]
+            else:
+                delta = friendlies[key] - existing_friendlies[key]
+                if (delta > 0):
+                    new_chickens[key] = delta
+                elif (delta < 0):
+                    dead_chickens[key] = delta
+
+        # print("Dead chickens: {}".format(dead_chickens))
+        # print("New chickens: {}".format(new_chickens))
+
+        # give new chickens a set of orders
+        for key in list(new_chickens.keys()):
+            x, y = key
+            num = new_chickens[key]
+            # print("{} chickens at {}".format(num, (x, y)))
+            food = True
+            for i in range(num):
+                if food:
+                    targets = self.high_food_targets
+                else:
+                    targets = self.high_money_targets
+                # print("Selecting target from: {}".format(targets))
+                available = [target for target in targets.items() if not target[1][1]][0]
+                # print("Next target: {}".format(available))
+                self.high_food_targets[available[0]] = (available[1][1], True)
+                # print("Generating a* from {} to {}".format((x,y), available[0]))
+                # plan = astar((x, y), available[0])
+                # print("Plan: {}".format(plan))
+                # food = not food
+
+        # translate orders into actions
+        self.chicken_actions = {}
+        for key in list(friendlies.keys()):
+            x, y = key
+            num = friendlies[key]
 
             for i in range(num):
                 key = ((x, y), actions.ALL_ACTIONS[i % len(actions.ALL_ACTIONS)])
-                if key not in orders:
-                    orders[key] = 1
+                if key not in self.chicken_actions:
+                    self.chicken_actions[key] = 1
                 else:
-                    orders[key] += 1
+                    self.chicken_actions[key] += 1
 
-        return orders
+        # print("Orders: {}".format(self.chicken_actions))
 
-
+        return self.chicken_actions
 
     def get_guys(self, guys, friendlies):
-        filtered_guys = []
+        filtered_guys = {}
         for x in range(0, len(guys)):
             for y in range(0, len(guys[x])):
                 if not guys[x][y]: continue
                 num_guys, is_mine = guys[x][y]
                 if is_mine == friendlies: continue
-                filtered_guys.append([x, y, guys[x][y][0]])
+                if (x, y) not in list(filtered_guys.keys()):
+                    filtered_guys[(x, y)] = guys[x][y][0]
+                else:
+                    filtered_guys[(x, y)] += guys[x][y][0]
         return filtered_guys
 
     def get_high_money_targets(self, map):
-        return sorted(self.flatten_map(map), key=lambda t: t[2])
+        # temporarily short-cut this
+        return self.flatten_map(map)
+        # return sorted(self.flatten_map(map).items(), key=lambda t: t[1][0])
 
     def get_high_food_targets(self, map):
-        return sorted(self.flatten_map(map), key=lambda t: 1-t[2])
+        # temporarily short-cut this
+        return self.flatten_map(map)
+        # return sorted(self.flatten_map(map).items(), key=lambda t: 1-t[1][0])
 
     def flatten_map(self, map):
-        flattened = []
+        flattened = {}
         for x in range(0, len(map)):
             for y in range(0, len(map[x])):
-                flattened.append([x, y, map[x][y]])
+                flattened[(x, y)] = (map[x][y], False)
         return flattened
 
-    #def astar():
+    def astar(start_pos, finish_pos):
+        # node format: ((g_score, h_score), point, parent)
+        start_node = ((0, astar_hscore(start_pos, finish_pos)), start_pos, None)
+        open = [start_node]
+        open_coords = [start_pos]
+        closed = []
+        closed_coords = []
+        while(len(open) > 0):
+            open.sort(key = lambda node: node[0][0] + node[0][1])
+            node = open.pop()
+            node_pos = node[1]
+            node_gscore = node[0][0]
+            closed.append(node)
+            closed_coords.append(node_pos)
+            if node_pos == finish: break
+            for delta_pos in [(1, 0), (-1, 0), (0, -1), (0, 1)]:
+                adj_pos = [sum(pair) in zip(delta_pos, node_pos)]
+                if adj_pos in closed_coords: continue
+                if adj_pos in open_coords:
+                    # normally we'd see if there's a better path
+                    # to this node, but I think that's a bit overkill
+                    # for now
+                    continue
+                else:
+                    open_coords.append(adj_pos)
+                    open.append((astar_fscore(node_pos, node_gscore, adj_pos, finish_pos), adj_pos, node))
+        # walk the path from the finish, back to the start
+        path = []
+        node = closed.pop()
+        while(node[2] != None):
+            path.append(node)
+            node = node[2]
+        # collect just the positions
+        return [node[1] for node in path.reverse()]
+
+    def astar_fscore(current_pos, current_gscore, next_pos, finish_pos):
+        return (astar_gscore(current_pos, current_gscore, next_pos), astar_hscore(next_pos, finish_pos))
+    
+    def astar_gscore(current_pos, current_gscore, next_pos):
+        delta = math.max(next_pos[0] - current_pos[0], next_pos[1] - current_pos[1])
+        return current_gscore + delta * 1
+
+    def astar_hscore(next_pos, finish_pos):
+        return math.sqrt((finish_pos[0] + next_pos[0]) ** 2 + (finish_pos[1] + next_pos[1]) ** 2)
 
     def get_closest(list, target):
         return sorted([get_distance(item, target) for item in list])
