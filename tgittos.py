@@ -1,4 +1,5 @@
 import actions
+import math
 
 class Player:
 
@@ -24,6 +25,8 @@ class Player:
         self.high_food_targets = self.get_high_food_targets(money_payout_rates)
         self.chicken_actions = {}
         self.orders = {}
+        self.width = len(money_payout_rates)
+        self.height = len(money_payout_rates[0])
 
 
     # Gets called each turn and where you decide where your chickens will go
@@ -115,13 +118,13 @@ class Player:
                     dead_chickens[key] = delta
 
         # print("Dead chickens: {}".format(dead_chickens))
-        # print("New chickens: {}".format(new_chickens))
+        print("New chickens: {}".format(new_chickens))
 
         # give new chickens a set of orders
         for key in list(new_chickens.keys()):
             x, y = key
             num = new_chickens[key]
-            # print("{} chickens at {}".format(num, (x, y)))
+            print("{} chickens at {}".format(num, (x, y)))
             food = True
             for i in range(num):
                 if food:
@@ -130,12 +133,12 @@ class Player:
                     targets = self.high_money_targets
                 # print("Selecting target from: {}".format(targets))
                 available = [target for target in targets.items() if not target[1][1]][0]
-                # print("Next target: {}".format(available))
+                print("Next target: {}".format(available))
                 self.high_food_targets[available[0]] = (available[1][1], True)
-                # print("Generating a* from {} to {}".format((x,y), available[0]))
-                # plan = astar((x, y), available[0])
-                # print("Plan: {}".format(plan))
-                # food = not food
+                print("Generating a* from {} to {}".format((x,y), available[0]))
+                plan = self.astar((x, y), available[0])
+                print("Plan: {}".format(plan))
+                food = not food
 
         # translate orders into actions
         self.chicken_actions = {}
@@ -184,32 +187,40 @@ class Player:
                 flattened[(x, y)] = (map[x][y], False)
         return flattened
 
-    def astar(start_pos, finish_pos):
+    def astar(self, start_pos, finish_pos):
+        # print("start_pos: {}, finish_pos: {}".format(start_pos, finish_pos))
         # node format: ((g_score, h_score), point, parent)
-        start_node = ((0, astar_hscore(start_pos, finish_pos)), start_pos, None)
+        start_node = ((0, self.astar_hscore(start_pos, finish_pos)), start_pos, None)
+        # print("start_node: {}".format(start_node))
         open = [start_node]
         open_coords = [start_pos]
         closed = []
         closed_coords = []
         while(len(open) > 0):
             open.sort(key = lambda node: node[0][0] + node[0][1])
-            node = open.pop()
+            # print ("sorted open list: {}".format([(sum(n[0]), n[1]) for n in open]))
+            node = open.pop(0)
             node_pos = node[1]
             node_gscore = node[0][0]
+            # print("node_pos: {}, node_gscore: {}".format(node_pos, node_gscore))
             closed.append(node)
             closed_coords.append(node_pos)
-            if node_pos == finish: break
+            if node_pos == finish_pos:
+                # print("found finish_pos")
+                break
+            # print("searching adjacent nodes")
             for delta_pos in [(1, 0), (-1, 0), (0, -1), (0, 1)]:
-                adj_pos = [sum(pair) in zip(delta_pos, node_pos)]
+                # print("delta_pos: {}".format(delta_pos))
+                adj_pos = tuple([sum(pair) for pair in zip(delta_pos, node_pos)])
+                # don't consider nodes that are off the map!
+                if (adj_pos[0] > self.width) or (adj_pos[0] < 0) or (adj_pos[1] > self.height) or (adj_pos[1] < 0): continue
+                # print("adj_pos: {}".format(adj_pos))
                 if adj_pos in closed_coords: continue
                 if adj_pos in open_coords:
-                    # normally we'd see if there's a better path
-                    # to this node, but I think that's a bit overkill
-                    # for now
                     continue
                 else:
                     open_coords.append(adj_pos)
-                    open.append((astar_fscore(node_pos, node_gscore, adj_pos, finish_pos), adj_pos, node))
+                    open.append((self.astar_fscore(node_pos, node_gscore, adj_pos, finish_pos), adj_pos, node))
         # walk the path from the finish, back to the start
         path = []
         node = closed.pop()
@@ -217,20 +228,25 @@ class Player:
             path.append(node)
             node = node[2]
         # collect just the positions
-        return [node[1] for node in path.reverse()]
+        path.reverse()
+        return [node[1] for node in path]
 
-    def astar_fscore(current_pos, current_gscore, next_pos, finish_pos):
-        return (astar_gscore(current_pos, current_gscore, next_pos), astar_hscore(next_pos, finish_pos))
+    def astar_fscore(self, current_pos, current_gscore, next_pos, finish_pos):
+        # print("calculating a* fscore")
+        return (self.astar_gscore(current_pos, current_gscore, next_pos), self.astar_hscore(next_pos, finish_pos))
     
-    def astar_gscore(current_pos, current_gscore, next_pos):
-        delta = math.max(next_pos[0] - current_pos[0], next_pos[1] - current_pos[1])
+    def astar_gscore(self, current_pos, current_gscore, next_pos):
+        # print("calculating a* gscore")
+        delta = abs(next_pos[0] - current_pos[0]) + abs(next_pos[1] - current_pos[1])
         return current_gscore + delta * 1
 
-    def astar_hscore(next_pos, finish_pos):
-        return math.sqrt((finish_pos[0] + next_pos[0]) ** 2 + (finish_pos[1] + next_pos[1]) ** 2)
+    def astar_hscore(self, next_pos, finish_pos):
+        # print("calculating a* hscore")
+        return abs(finish_pos[0] - next_pos[0]) + abs(finish_pos[1] - next_pos[1])
 
-    def get_closest(list, target):
+    def get_closest(self, list, target):
         return sorted([get_distance(item, target) for item in list])
 
-    def get_distance(pos, target):
-        return math.sqrt((pos[0] + target[0]) ** 2 + (pos[1] + target[1]) ** 2)
+    def get_distance(self, pos, target):
+        # print("Getting distance between {} and {}".format(pos, target))
+        return math.sqrt((pos[0] - target[0]) ** 2 + (pos[1] - target[1]) ** 2)
